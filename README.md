@@ -21,12 +21,12 @@ Before running the script, make sure you have:
 
 ## Usage
 
-Run the script from Terminal with `sudo` and choose one of the supported modes (replace `./gateway-tuner` with the path to your local script file):
+Run the script from Terminal with `sudo` and choose one of the supported modes:
 
-    sudo ./<path-to-script> CONNECT
-    sudo ./<path-to-script> CLEAN
+    sudo ./gateway-tuner CONNECT
+    sudo ./gateway-tuner CLEAN
 
-If the script file has a different name or extension in your local copy, substitute that filename in the commands above.
+If you're running the script from another directory, replace `./gateway-tuner` with the correct path to the script.
 
 ### Typical workflow
 
