@@ -1,6 +1,6 @@
 #!/bin/bash
 # =================================================================
-# doctoey :: Split-Tunnel Network Controller (Modern Minimalist)
+# doctoey :: Split-Tunnel Network Controller (Modern Minimalist v4.2)
 # Detects active LAN, injects internal subnet routes via gateway.
 # CONNECT: LAN reachable → inject routes + tune metrics
 # CLEAN  : LAN absent/unreachable → remove routes, reset metrics
@@ -26,12 +26,15 @@ sudo -v || exit 1
 ACTIVE_LAN=$(route get "$GW" 2>/dev/null | awk '/interface:/{print $2}' || true)
 WIFI_IF=$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2}' || true)
 
+# Grab the default external Wi-Fi gateway IP for enhanced telemetry summary
+WIFI_GW=$(route get default 2>/dev/null | awk '/gateway:/{print $2}' || echo "UNKNOWN")
+
 # -- Interrupt Handler -------------------------------------------
 # Triggers on Ctrl+C or SIGTERM to rollback all network mutations
 _cleanup() {
     echo -e "\n${R} ⚠  INTERRUPTED — Rolling back changes...${NC}"
     [[ -n "${ACTIVE_LAN:-}" ]] && sudo ifconfig "$ACTIVE_LAN" metric 0 2>/dev/null || true
-    [[ -n "${WIFI_IF:-}" ]]   && sudo ifconfig "$WIFI_IF"   metric 0 2>/dev/null || true
+    [[ -n "${WIFI_IF:-}" ]] && sudo ifconfig "$WIFI_IF" metric 0 2>/dev/null || true
     for n in "${NETS[@]}"; do
         sudo route -n delete "$n" >/dev/null 2>&1 || true
     done
@@ -92,7 +95,7 @@ if [[ "$MODE" == "CLEAN" ]]; then
     echo -e "${B}─ ${W}NETWORK STATUS SUMMARY ${B}──────────────────────────────${NC}"
     printf "  %-18s : %b%s${NC}\n" "CURRENT STATE" "$Y" "DEFAULT ROUTING"
     printf "  %-18s : %bWi-Fi (%b%s%b)${NC}\n" "PRIMARY UPLINK" "$W" "$C" "${WIFI_IF:-UNKNOWN}" "$W"
-    printf "  %-18s : %b%s${NC}\n" "ROUTING MODE"   "$Y" "STANDARD"
+    printf "  %-18s : %b%s${NC}\n" "ROUTING MODE" "$Y" "STANDARD"
     echo -e "${B}────────────────────────────────────────────────────────${NC}"
     exit 0
 fi
@@ -103,12 +106,11 @@ fi
 if [[ "$MODE" == "CONNECT" ]]; then
 
     echo -e "${T_CYAN} ➔ ${NC}GATEWAY CHECK  ${T_GRAY}.......${NC} ${G}ONLINE${NC} ($GW)"
+    echo -e "${T_CYAN} ➔ ${NC}INJECTING RTM  ${T_GRAY}.......${NC} Executing..."
 
     # LAN metric 1 wins for internal targets; Wi-Fi metric 100 handles general internet
     sudo ifconfig "$ACTIVE_LAN" metric 1
     [[ -n "${WIFI_IF:-}" ]] && sudo ifconfig "$WIFI_IF" metric 100
-
-    echo -e "${T_CYAN} ➔ ${NC}INJECTING RTM  ${T_GRAY}.......${NC} Executing..."
 
     # Purge stale routing entries before injection phase
     for n in "${NETS[@]}"; do
@@ -145,24 +147,23 @@ if [[ "$MODE" == "CONNECT" ]]; then
     sudo dscacheutil -flushcache
     sudo killall -HUP mDNSResponder 2>/dev/null || true
 
-    # Final sanity verification: Ensure default gateway interface hasn't flipped
     DEFAULT_IF=$(route get default 2>/dev/null | awk '/interface:/{print $2}' || echo "UNKNOWN")
 
-    # ---- MINIMALIST SUMMARY (CONNECT MODE) ----
+    # ---- MINIMALIST SUMMARY (CONNECT MODE - FIXED PARSING BUG) ----
     echo ""
     echo -e "${B}─ ${W}NETWORK STATUS SUMMARY ${B}──────────────────────────────${NC}"
-    printf "  %-18s : %b%s${NC}\n" "INTERNAL PATH"  "$G" "${ACTIVE_LAN} (Priority 1)"
+    
+    printf "  %-18s : %b%s (Gateway: %s)${NC}\n" "INTERNAL PATH" "$G" "$ACTIVE_LAN" "$GW"
     
     if [[ "$DEFAULT_IF" == "$WIFI_IF" ]]; then
-        printf "  %-18s : %b%s (%b%s%b Default)${NC}\n" "EXTERNAL PATH" "$G" "$WIFI_IF" "$C" "Wi-Fi" "$G"
-        printf "  %-18s : %b%s${NC}\n" "GATEWAY ADDR"   "$W" "$GW"
-        printf "  %-18s : %b%s${NC}\n" "CURRENT STATE"  "$G" "SECURE SPLIT-TUNNEL"
+        printf "  %-18s : %b%s (Wi-Fi Gateway: %s)${NC}\n" "EXTERNAL PATH" "$C" "$WIFI_IF" "$WIFI_GW"
+        
+        printf "  %-18s : %b%s${NC}\n" "CURRENT STATE" "$G" "SECURE SPLIT-TUNNEL"
         echo -e "${B}────────────────────────────────────────────────────────${NC}"
     else
         # Fault isolation handler: Triggers if LAN hijacked the primary default route scope
         printf "  %-18s : %b%s (HIJACKED!)${NC}\n" "EXTERNAL PATH" "$R" "$DEFAULT_IF"
-        printf "  %-18s : %b%s${NC}\n" "GATEWAY ADDR"   "$W" "$GW"
-        printf "  %-18s : %b%s${NC}\n" "CURRENT STATE"  "$R" "ERROR — ROLLING BACK"
+        printf "  %-18s : %b%s${NC}\n" "CURRENT STATE" "$R" "ERROR — ROLLING BACK"
         echo -e "${B}────────────────────────────────────────────────────────${NC}"
 
         for n in "${NETS[@]}"; do sudo route -n delete "$n" >/dev/null 2>&1 || true; done
