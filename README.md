@@ -63,7 +63,7 @@ The script is intended to be customized by editing the arrays defined near the t
 
 - **destination hosts or subnets** - the traffic that should be routed differently
 - **gateway or next-hop values** - where those destinations should be sent
-- **interface names** - the macOS network device to use, such as Wi‑Fi, USB tethering, or another active link
+- **interface names** - the macOS network device to use (for example, `en0` for Wi‑Fi, `en1` for Ethernet, or the interface shown by `ifconfig`)
 - **cleanup targets** - the routes or entries that `CLEAN` should remove
 
 When editing these arrays:
